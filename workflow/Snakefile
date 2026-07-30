@@ -620,6 +620,7 @@ rule structure_inference:
             (format_af3_requested_fold(fold, protein_delimiter) if IS_AF3 else fold)
             for fold in BATCH_FOLDS[wc.batch]
         ),
+        requested_fold_qualifiers=lambda wc: " ".join(BATCH_FOLDS[wc.batch]),
         fold_output_dirs=lambda wildcards: " ".join(
             batch_prediction_dirs(wildcards.batch)
         ),
@@ -697,9 +698,10 @@ rule structure_inference:
         # and a shared --jax_compilation_cache_dir lets later folds reuse earlier
         # compilations. Arrays split on spaces (fold specs / paths contain none).
         read -ra _aj_inputs <<< "{params.requested_folds}"
+        read -ra _aj_qualifiers <<< "{params.requested_fold_qualifiers}"
         read -ra _aj_outdirs <<< "{params.fold_output_dirs}"
         for _aj_i in "${{!_aj_inputs[@]}}"; do
-
+            echo "Running structure prediction for ${{_aj_qualifiers[$_aj_i]}}" >&2
             echo "Running structure prediction for ${{_aj_inputs[$_aj_i]}}" >&2
 
             run_structure_prediction.py \
