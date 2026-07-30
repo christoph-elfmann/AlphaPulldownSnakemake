@@ -621,6 +621,10 @@ rule structure_inference:
             for fold in BATCH_FOLDS[wc.batch]
         ),
         requested_fold_qualifiers=lambda wc: " ".join(BATCH_FOLDS[wc.batch]),
+        requested_fold_completed_targets=lambda wc: " ".join(
+            completed_fold_target(fold, protein_delimiter)
+            for fold in BATCH_FOLDS[wc.batch]
+        ),
         fold_output_dirs=lambda wildcards: " ".join(
             batch_prediction_dirs(wildcards.batch)
         ),
@@ -699,10 +703,13 @@ rule structure_inference:
         # compilations. Arrays split on spaces (fold specs / paths contain none).
         read -ra _aj_inputs <<< "{params.requested_folds}"
         read -ra _aj_qualifiers <<< "{params.requested_fold_qualifiers}"
+        read -ra _aj_targets <<< "{params.requested_fold_completed_targets}"
         read -ra _aj_outdirs <<< "{params.fold_output_dirs}"
+
+        echo "Structures in batch: ${{_aj_qualifiers}}""
+
         for _aj_i in "${{!_aj_inputs[@]}}"; do
             echo "Running structure prediction for ${{_aj_qualifiers[$_aj_i]}}" >&2
-            echo "Running structure prediction for ${{_aj_inputs[$_aj_i]}}" >&2
 
             run_structure_prediction.py \
                 --input "${{_aj_inputs[$_aj_i]}}" \
@@ -712,8 +719,9 @@ rule structure_inference:
                 --features_directory={params.feature_directory} \
                 {params.cli_parameters}
 
-            echo "Finished structure prediction for ${{_aj_inputs[$_aj_i]}}" >&2
-
+            echo "Finished structure prediction for ${{_aj_qualifiers[$_aj_i]}}"
+            echo "Creating ${{_aj_targets[$_aj_i]}}" >&2
+            touch "${{_aj_targets[$_aj_i]}}"
 
         done
 
