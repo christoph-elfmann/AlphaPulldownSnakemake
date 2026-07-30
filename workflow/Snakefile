@@ -622,7 +622,7 @@ rule structure_inference:
         ),
         requested_fold_qualifiers=lambda wc: " ".join(BATCH_FOLDS[wc.batch]),
         requested_fold_completed_targets=lambda wc: " ".join(
-            completed_fold_target(fold, protein_delimiter)
+            completed_fold_target(fold)
             for fold in BATCH_FOLDS[wc.batch]
         ),
         fold_output_dirs=lambda wildcards: " ".join(
