@@ -699,6 +699,9 @@ rule structure_inference:
         read -ra _aj_inputs <<< "{params.requested_folds}"
         read -ra _aj_outdirs <<< "{params.fold_output_dirs}"
         for _aj_i in "${{!_aj_inputs[@]}}"; do
+
+            echo "Running structure prediction for ${{_aj_inputs[$_aj_i]}}" >&2
+
             run_structure_prediction.py \
                 --input "${{_aj_inputs[$_aj_i]}}" \
                 --output_directory="${{_aj_outdirs[$_aj_i]}}" \
@@ -706,6 +709,10 @@ rule structure_inference:
                 --data_directory={params.data_directory} \
                 --features_directory={params.feature_directory} \
                 {params.cli_parameters}
+
+            echo "Finished structure prediction for ${{_aj_inputs[$_aj_i]}}" >&2
+
+
         done
 
         mkdir -p "$(dirname "{output}")"
