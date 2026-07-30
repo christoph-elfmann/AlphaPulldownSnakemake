@@ -706,7 +706,7 @@ rule structure_inference:
         read -ra _aj_targets <<< "{params.requested_fold_completed_targets}"
         read -ra _aj_outdirs <<< "{params.fold_output_dirs}"
 
-        echo "Structures in batch: ${{_aj_qualifiers}}""
+        echo "Structures in batch: ${{_aj_qualifiers}}"
 
         for _aj_i in "${{!_aj_inputs[@]}}"; do
             echo "Running structure prediction for ${{_aj_qualifiers[$_aj_i]}}" >&2
