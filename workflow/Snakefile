@@ -407,6 +407,10 @@ required_folds = [
     join(config["output_directory"], "predictions", batch_id, "completed_fold.txt")
     for batch_id in BATCH_FOLDS
 ]
+logger.info(f"[batching] Required fold targets ({len(required_folds)}):")
+for _required_fold in required_folds:
+    logger.info(f"[batching]   {_required_fold}")
+
 ENABLE_STRUCTURE_ANALYSIS = config.get("enable_structure_analysis", True)
 GENERATE_RECURSIVE_REPORT = config.get("generate_recursive_report", False)
 RECURSIVE_REPORT_ARGUMENTS = config.get("recursive_report_arguments", {})
