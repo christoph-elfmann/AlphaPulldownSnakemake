@@ -357,12 +357,10 @@ if BATCH_SIZE > 1 and _unfinished_folds:
 else:
     _fold_batches = [[fold] for fold in _unfinished_folds]
 
-_fold_batches = [[fold] for fold in _completed_folds] + _fold_batches
-
-# batch_id -> [fold, ...] and the inverse fold -> batch_id. The batch id is the
-# first fold of the batch, so the rule's declared output lives in a real prediction
-# directory (no synthetic dirs). The shell loop additionally writes each member's
-# own completed_fold.txt, which excludes it from batching in later invocations.
+# Only unfinished folds enter this map. The batch id is the first fold of the
+# batch, so the rule's declared output lives in a real prediction directory (no
+# synthetic dirs). The shell loop additionally writes each member's own
+# completed_fold.txt, which excludes it from batching in later invocations.
 BATCH_FOLDS = {}
 FOLD_BATCH = {}
 for _batch_members in _fold_batches:
@@ -372,35 +370,52 @@ for _batch_members in _fold_batches:
         FOLD_BATCH[_member] = _batch_id
 
 logger.info(
-    f"[batching] Created {len(_fold_batches) - len(_completed_folds)} pending "
+    f"[batching] Created {len(BATCH_FOLDS)} pending "
     f"batch(es) from {len(_unfinished_folds)} unfinished fold(s); "
     f"skipping {len(_completed_folds)} completed fold(s); "
     f"batch_size={BATCH_SIZE}, batch_max_tokens={BATCH_MAX_TOKENS}"
 )
 
 for _batch_id, _members in BATCH_FOLDS.items():
-    if _batch_id not in _completed_folds:
-        logger.info(f"[batching] {_batch_id}: {', '.join(_members)}")
+    logger.info(f"[batching] {_batch_id}: {', '.join(_members)}")
+
+
+def batch_members(batch_id):
+    """Return a pending batch, or a safe singleton for an existing marker.
+
+    The fallback lets Snakemake evaluate downstream dependencies on completed
+    folds without adding those folds back to the inference targets.
+    """
+    return BATCH_FOLDS.get(batch_id, [batch_id])
 
 
 def batch_prediction_dirs(batch_id):
     return [
         join(config["output_directory"], "predictions", fold)
-        for fold in BATCH_FOLDS[batch_id]
+        for fold in batch_members(batch_id)
     ]
 
 
 def batch_max_tokens_for(batch_id):
     """Largest fold in the batch sizes its memory/GPU tier (folds run one at a
     time, so peak memory is the max, not the sum)."""
-    return max((_fold_tokens(fold) for fold in BATCH_FOLDS[batch_id]), default=0)
+    return max((_fold_tokens(fold) for fold in batch_members(batch_id)), default=0)
 
 
-def completed_fold_target(fold):
-    """Return the per-fold sentinel written after that fold finishes."""
+def fold_completion_marker(fold):
+    """Return the individual marker written after this fold finishes."""
     return join(
         config["output_directory"], "predictions", fold, "completed_fold.txt"
     )
+
+
+def completed_fold_target(fold):
+    """Return the DAG dependency for a fold's completion.
+
+    Pending folds depend on their shared batch output. Folds completed before this
+    invocation are absent from FOLD_BATCH and depend on their individual marker.
+    """
+    return fold_completion_marker(FOLD_BATCH.get(fold, fold))
 
 
 required_folds = [
@@ -624,7 +639,7 @@ def lookup_batch_features(wildcards):
     # the batch, de-duplicated (folds may share a protein) and order-preserving.
     feature_files = []
     seen = set()
-    for fold in BATCH_FOLDS[wildcards.batch]:
+    for fold in batch_members(wildcards.batch):
         protein_bases, json_basenames = split_fold_inputs(fold, protein_delimiter)
         for feature_basename in [feature_name(b) for b in protein_bases] + list(json_basenames):
             if feature_basename not in seen:
@@ -649,12 +664,12 @@ rule structure_inference:
         # paths never contain spaces, so space-splitting in bash is safe.
         requested_folds=lambda wc: " ".join(
             (format_af3_requested_fold(fold, protein_delimiter) if IS_AF3 else fold)
-            for fold in BATCH_FOLDS[wc.batch]
+            for fold in batch_members(wc.batch)
         ),
-        requested_fold_qualifiers=lambda wc: " ".join(BATCH_FOLDS[wc.batch]),
+        requested_fold_qualifiers=lambda wc: " ".join(batch_members(wc.batch)),
         requested_fold_completed_targets=lambda wc: " ".join(
-            completed_fold_target(fold)
-            for fold in BATCH_FOLDS[wc.batch]
+            fold_completion_marker(fold)
+            for fold in batch_members(wc.batch)
         ),
         fold_output_dirs=lambda wildcards: " ".join(
             batch_prediction_dirs(wildcards.batch)
@@ -697,7 +712,7 @@ rule structure_inference:
             # Walltime scales with the number of folds in the batch (they run
             # sequentially, one CLI call each), capped at the partition MaxTime.
             runtime_fn=lambda wc, attempt: min(
-                structure_inference_runtime_minutes * len(BATCH_FOLDS[wc.batch]) * attempt,
+                structure_inference_runtime_minutes * len(batch_members(wc.batch)) * attempt,
                 STRUCTURE_INFERENCE_MAX_RUNTIME,
             ),
         ),
