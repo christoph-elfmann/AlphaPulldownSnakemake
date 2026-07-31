@@ -334,19 +334,35 @@ def _fold_grouping_tokens(fold):
     return total
 
 
-if BATCH_SIZE > 1 and kept_folds:
+# Folds completed by an earlier invocation remain singleton entries in the DAG:
+# their existing sentinel satisfies the inference rule immediately. Only folds
+# without their own sentinel are eligible for grouping into a new batch.
+_completed_folds = []
+_unfinished_folds = []
+for _fold in kept_folds:
+    _fold_sentinel = join(
+        config["output_directory"], "predictions", _fold, "completed_fold.txt"
+    )
+    if exists(_fold_sentinel):
+        _completed_folds.append(_fold)
+    else:
+        _unfinished_folds.append(_fold)
+
+if BATCH_SIZE > 1 and _unfinished_folds:
     _fold_batches = bin_folds(
-        [(fold, _fold_grouping_tokens(fold)) for fold in kept_folds],
+        [(fold, _fold_grouping_tokens(fold)) for fold in _unfinished_folds],
         batch_size=BATCH_SIZE,
         max_batch_tokens=BATCH_MAX_TOKENS,
     )
 else:
-    _fold_batches = [[fold] for fold in kept_folds]
+    _fold_batches = [[fold] for fold in _unfinished_folds]
+
+_fold_batches = [[fold] for fold in _completed_folds] + _fold_batches
 
 # batch_id -> [fold, ...] and the inverse fold -> batch_id. The batch id is the
-# first fold of the batch, so the sentinel predictions/<batch_id>/completed_fold.txt
-# lives in a real prediction directory (no synthetic dirs); singletons reduce to
-# the original predictions/<fold>/completed_fold.txt.
+# first fold of the batch, so the rule's declared output lives in a real prediction
+# directory (no synthetic dirs). The shell loop additionally writes each member's
+# own completed_fold.txt, which excludes it from batching in later invocations.
 BATCH_FOLDS = {}
 FOLD_BATCH = {}
 for _batch_members in _fold_batches:
@@ -356,15 +372,15 @@ for _batch_members in _fold_batches:
         FOLD_BATCH[_member] = _batch_id
 
 logger.info(
-    f"[batching] Created {len(BATCH_FOLDS)} batch(es) from "
-    f"{len(kept_folds)} fold(s); batch_size={BATCH_SIZE}, "
-    f"batch_max_tokens={BATCH_MAX_TOKENS}"
+    f"[batching] Created {len(_fold_batches) - len(_completed_folds)} pending "
+    f"batch(es) from {len(_unfinished_folds)} unfinished fold(s); "
+    f"skipping {len(_completed_folds)} completed fold(s); "
+    f"batch_size={BATCH_SIZE}, batch_max_tokens={BATCH_MAX_TOKENS}"
 )
 
 for _batch_id, _members in BATCH_FOLDS.items():
-    logger.info(
-        f"[batching] {_batch_id}: {', '.join(_members)}"
-    )
+    if _batch_id not in _completed_folds:
+        logger.info(f"[batching] {_batch_id}: {', '.join(_members)}")
 
 
 def batch_prediction_dirs(batch_id):
@@ -381,9 +397,9 @@ def batch_max_tokens_for(batch_id):
 
 
 def completed_fold_target(fold):
-    """Sentinel marking a fold's batch as done (shared by all folds in the batch)."""
+    """Return the per-fold sentinel written after that fold finishes."""
     return join(
-        config["output_directory"], "predictions", FOLD_BATCH[fold], "completed_fold.txt"
+        config["output_directory"], "predictions", fold, "completed_fold.txt"
     )
 
 
