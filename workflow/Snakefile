@@ -756,6 +756,7 @@ rule structure_inference:
 
         for _aj_i in "${{!_aj_inputs[@]}}"; do
             echo "Running structure prediction for ${{_aj_qualifiers[$_aj_i]}}" >&2
+            _aj_prediction_start=$(date +%s)
 
             run_structure_prediction.py \
                 --input "${{_aj_inputs[$_aj_i]}}" \
@@ -765,6 +766,9 @@ rule structure_inference:
                 --features_directory={params.feature_directory} \
                 {params.cli_parameters}
 
+            _aj_prediction_end=$(date +%s)
+            _aj_prediction_seconds=$((_aj_prediction_end - _aj_prediction_start))
+            echo "[prediction-timing] fold=${{_aj_qualifiers[$_aj_i]}} seconds=${{_aj_prediction_seconds}}"
             echo "Finished structure prediction for ${{_aj_qualifiers[$_aj_i]}}"
             echo "Creating completed fold marker: ${{_aj_targets[$_aj_i]}}" >&2
             touch "${{_aj_targets[$_aj_i]}}"
