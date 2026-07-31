@@ -355,6 +355,17 @@ for _batch_members in _fold_batches:
     for _member in _batch_members:
         FOLD_BATCH[_member] = _batch_id
 
+logger.info(
+    f"[batching] Created {len(BATCH_FOLDS)} batch(es) from "
+    f"{len(kept_folds)} fold(s); batch_size={BATCH_SIZE}, "
+    f"batch_max_tokens={BATCH_MAX_TOKENS}"
+)
+
+for _batch_id, _members in BATCH_FOLDS.items():
+    logger.info(
+        f"[batching] {_batch_id}: {', '.join(_members)}"
+    )
+
 
 def batch_prediction_dirs(batch_id):
     return [
