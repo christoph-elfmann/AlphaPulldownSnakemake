@@ -720,7 +720,7 @@ rule structure_inference:
                 {params.cli_parameters}
 
             echo "Finished structure prediction for ${{_aj_qualifiers[$_aj_i]}}"
-            echo "Creating ${{_aj_targets[$_aj_i]}}" >&2
+            echo "Creating completed fold marker: ${{_aj_targets[$_aj_i]}}" >&2
             touch "${{_aj_targets[$_aj_i]}}"
 
         done
