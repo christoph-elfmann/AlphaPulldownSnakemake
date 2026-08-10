@@ -807,6 +807,10 @@ rule create_jobber_prediction_tasks:
             "structure_inference.tasks",
         ),
     params:
+        prediction_runner=config.get(
+            "jobber_prediction_script",
+            "run_jobber_prediction.sh",
+        ),
         feature_directory=join(config["output_directory"], "features"),
         data_directory=config["backend_weights_directory"],
         protein_delimiter=protein_delimiter,
@@ -842,10 +846,9 @@ rule create_jobber_prediction_tasks:
                 )
 
                 command = [
-                    "run_structure_prediction.py",
-                    "--input",
+                    params.prediction_runner,
                     requested_fold,
-                    f"--output_directory={output_directory}",
+                    output_directory,
                     f"--protein_delimiter={params.protein_delimiter}",
                     f"--data_directory={params.data_directory}",
                     f"--features_directory={params.feature_directory}",
