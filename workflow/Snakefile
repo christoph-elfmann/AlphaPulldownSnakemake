@@ -13,6 +13,7 @@ include: "rules/common.smk"
 from pathlib import Path
 from os import makedirs, listdir, symlink, remove
 from os.path import abspath, join, splitext, basename, exists, lexists, realpath
+import shlex
 
 from alphapulldown_input_parser.parser import FoldDataset, generate_fold_specifications
 
@@ -794,3 +795,76 @@ if ENABLE_STRUCTURE_ANALYSIS and GENERATE_RECURSIVE_REPORT:
                     --recursive \
                     --summary {output} {params.extra_args}
             """
+
+
+
+
+rule create_jobber_prediction_tasks:
+    output:
+        task_file=join(
+            config["output_directory"],
+            "jobber",
+            "structure_inference.tasks",
+        ),
+    params:
+        feature_directory=join(config["output_directory"], "features"),
+        data_directory=config["backend_weights_directory"],
+        protein_delimiter=protein_delimiter,
+        cli_parameters=STRUCTURE_INFERENCE_CLI,
+    run:
+        # Flatten all folds from all Snakemake batches. Jobber does its own
+        # dynamic scheduling, so the original Snakemake batching is irrelevant
+        # here.
+        folds = [
+            fold
+            for batch in BATCH_FOLDS.values()
+            for fold in batch
+        ]
+
+        # Avoid accidentally writing the same fold twice.
+        folds = list(dict.fromkeys(folds))
+
+        task_file = str(output.task_file)
+        os.makedirs(os.path.dirname(task_file), exist_ok=True)
+
+        with open(task_file, "w") as f:
+            for fold in folds:
+                requested_fold = (
+                    format_af3_requested_fold(fold, protein_delimiter)
+                    if IS_AF3
+                    else fold
+                )
+
+                output_directory = join(
+                    config["output_directory"],
+                    "predictions",
+                    fold,
+                )
+
+                command = [
+                    "run_structure_prediction.py",
+                    "--input",
+                    requested_fold,
+                    f"--output_directory={output_directory}",
+                    f"--protein_delimiter={params.protein_delimiter}",
+                    f"--data_directory={params.data_directory}",
+                    f"--features_directory={params.feature_directory}",
+                ]
+
+                # STRUCTURE_INFERENCE_CLI is already constructed as a CLI string
+                # by the workflow, so append it after shell-quoting the fixed
+                # arguments above.
+                command_string = " ".join(
+                    shlex.quote(str(arg))
+                    for arg in command
+                )
+
+                if params.cli_parameters:
+                    command_string += f" {params.cli_parameters}"
+
+                f.write(command_string + "\n")
+
+        print(
+            f"Wrote {len(folds)} Jobber prediction tasks to "
+            f"{task_file}"
+        )
