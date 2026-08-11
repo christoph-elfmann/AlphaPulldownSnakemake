@@ -819,14 +819,16 @@ rule create_jobber_prediction_tasks:
         # Flatten all folds from all Snakemake batches. Jobber does its own
         # dynamic scheduling, so the original Snakemake batching is irrelevant
         # here.
-        folds = [
-            fold
-            for batch in BATCH_FOLDS.values()
-            for fold in batch
-        ]
-
-        # Avoid accidentally writing the same fold twice.
-        folds = list(dict.fromkeys(folds))
+        folds = list(
+            sorted(
+                {
+                    fold
+                    for batch in BATCH_FOLDS.values()
+                    for fold in batch
+                    if not Path(completed_fold_target(fold)).exists()
+                }
+            )
+        )
 
         task_file = str(output.task_file)
         os.makedirs(os.path.dirname(task_file), exist_ok=True)
