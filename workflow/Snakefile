@@ -819,13 +819,22 @@ rule create_jobber_prediction_tasks:
         # Flatten all folds from all Snakemake batches. Jobber does its own
         # dynamic scheduling, so the original Snakemake batching is irrelevant
         # here.
+        def _get_completion_sentinel(fold: str):
+            return (
+                Path(config["output_directory"])
+                / "predictions"
+                / fold
+                / "completed_fold.txt"
+            )
+
+
         folds = list(
             sorted(
                 {
                     fold
                     for batch in BATCH_FOLDS.values()
                     for fold in batch
-                    if not Path(completed_fold_target(fold)).exists()
+                    if not _get_completion_sentinel(fold).exists()
                 }
             )
         )
